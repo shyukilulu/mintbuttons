@@ -119,7 +119,7 @@ const NFTMintingButton = () => {
 
     try {
       // Umi 인스턴스 생성 (mainnet 사용)
-      const umi = createUmi('https://bold-magical-knowledge.solana-mainnet.quiknode.pro/d8f37e5232743c70f1701b6fe991cce0d8a5b138/');
+      const umi = createUmi('https://api.mainnet-beta.solana.com');
       
       // 먼저 mplCandyMachine 플러그인 등록
       umi.use(mplCandyMachine());
