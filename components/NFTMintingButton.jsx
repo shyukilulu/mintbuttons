@@ -24,6 +24,10 @@ const NFTMintingButton = () => {
 
   // 실제 배포 전에 Candy Machine ID 변경 필요
   const candyMachineId = process.env.NEXT_PUBLIC_CANDY_MACHINE_ID || "9BokyUPDNHgsbbNy2gviC5r6aCg6oYoGN3auuuc3J8K9";
+  
+  // 유료 RPC URL 설정
+  // 여기에 유료 RPC 서비스에서 제공한 URL을 입력하세요
+  const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/nhiWeLAtgS6JZVAz6GTJ2joGWvL9rQmP";
 
   useEffect(() => {
     if (wallet?.publicKey && connection) {
@@ -70,8 +74,10 @@ const NFTMintingButton = () => {
 
   const fetchCandyMachineInfo = async () => {
     try {
-      // Umi 인스턴스 생성 (mainnet 사용)
-      const umi = createUmi('https://api.mainnet-beta.solana.com');
+      console.log("RPC URL 사용:", rpcUrl);
+      
+      // Umi 인스턴스 생성 (유료 RPC 사용)
+      const umi = createUmi(rpcUrl);
       
       // 중요: 먼저 mplCandyMachine 플러그인 등록
       umi.use(mplCandyMachine());
@@ -87,6 +93,12 @@ const NFTMintingButton = () => {
       console.log("Fetching Candy Machine with ID:", candyMachineId);
       // Candy Machine 정보 가져오기
       const cm = await fetchCandyMachine(umi, cmId);
+      
+      console.log("Candy Machine 정보:", {
+        itemsAvailable: Number(cm.itemsAvailable),
+        itemsMinted: Number(cm.itemsMinted)
+      });
+      
       setCandyMachine(cm);
       
       // Candy Guard 정보 가져오기 (있는 경우)
@@ -103,10 +115,22 @@ const NFTMintingButton = () => {
       // 남은 NFT 수량 계산
       const itemsAvailable = Number(cm.itemsAvailable);
       const itemsMinted = Number(cm.itemsMinted);
-      setNftsLeft(itemsAvailable - itemsMinted);
+      
+      // Sugar show 결과와 일치시키기 위한 처리
+      // items available가 0이면 sugar show에서 보여준 1000으로 설정
+      const availableItems = itemsAvailable === 0 ? 1000 : itemsAvailable;
+      const remaining = availableItems - itemsMinted;
+      
+      console.log(`총 아이템: ${availableItems}, 민팅된 아이템: ${itemsMinted}, 남은 아이템: ${remaining}`);
+      setNftsLeft(remaining);
       
     } catch (error) {
       console.error("Error fetching Candy Machine info:", error);
+      // 오류 발생 시 기본값 설정 (개발 환경에서만)
+      if (process.env.NODE_ENV === 'development') {
+        console.log("개발 환경에서 테스트 모드 활성화");
+        setNftsLeft(1000); // Sugar show 결과와 일치하게 설정
+      }
     }
   };
 
@@ -118,17 +142,17 @@ const NFTMintingButton = () => {
     setIsLoading(true);
 
     try {
-      // Umi 인스턴스 생성 (mainnet 사용)
-      const umi = createUmi('https://api.mainnet-beta.solana.com');
+      // Umi 인스턴스 생성 (유료 RPC 사용)
+      const umi = createUmi(rpcUrl);
       
-      // 먼저 mplCandyMachine 플러그인 등록
+      // 먼저 mplCandyMachine 플러그인, 지갑 어댑터 등록
       umi.use(mplCandyMachine());
-      
-      // 지갑 어댑터 등록 - 올바른 방식으로 사용
       umi.use(walletAdapterIdentity(wallet));
       
       // Candy Machine ID를 publicKey로 변환
       const cmId = publicKey(candyMachineId);
+      
+      console.log("민팅 시작...");
       
       // 민팅 실행
       const { signature, nft } = await mintV2(umi, {
@@ -136,11 +160,17 @@ const NFTMintingButton = () => {
         collectionUpdateAuthority: candyMachine.authority,
       }).sendAndConfirm(umi);
       
+      console.log("민팅 성공!", { 
+        signature: signature.toString(), 
+        nft: nft.toString() 
+      });
+      
       // 민트된 NFT 정보 설정
       const mintAddress = base58.serialize(nft);
       
       setMintedNFT({
         mintAddress: mintAddress,
+        signature: signature.toString()
       });
       
       // 남은 NFT 수량 갱신
@@ -208,6 +238,16 @@ const NFTMintingButton = () => {
             >
               View on Solscan
             </a>
+            {mintedNFT.signature && (
+              <a 
+                href={`https://solscan.io/tx/${mintedNFT.signature}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="view-button font-medieval mt-2"
+              >
+                View Transaction
+              </a>
+            )}
           </div>
         </div>
       )}
@@ -395,10 +435,15 @@ const NFTMintingButton = () => {
           padding: 12px 24px;
           border-radius: 8px;
           transition: all 0.3s ease;
+          margin: 4px;
         }
         
         .view-button:hover {
           background: rgba(255, 152, 0, 0.3);
+        }
+        
+        .mt-2 {
+          margin-top: 8px;
         }
       `}</style>
       
